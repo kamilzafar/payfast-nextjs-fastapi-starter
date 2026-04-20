@@ -1,0 +1,8 @@
+Renewal Due Today
+
+Hi {{ user.name or user.email }},
+
+Your {{ plan.name }} renewal is due today.
+Please complete your payment to keep your subscription active.
+
+Pay here: {{ pay_url }}

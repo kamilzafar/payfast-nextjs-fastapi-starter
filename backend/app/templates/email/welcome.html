@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Welcome to {{ plan.name }}</title></head>
+<body style="font-family: Arial, sans-serif; color: #222; max-width: 600px; margin: 0 auto; padding: 24px;">
+  <h1 style="font-size: 22px; font-weight: bold;">Welcome, {{ user.name or user.email }}.</h1>
+  <p>Your <strong>{{ plan.name }}</strong> subscription is now active.</p>
+  <p>Your subscription is active until <strong>{{ period_end }}</strong>.</p>
+  <hr style="border: none; border-top: 1px solid #ddd; margin: 24px 0;">
+  <p style="font-size: 13px; color: #666;">
+    If you have any questions, reply to this email or contact our support team.
+  </p>
+</body>
+</html>

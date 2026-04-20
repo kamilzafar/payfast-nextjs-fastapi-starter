@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Payment Receipt</title></head>
+<body style="font-family: Arial, sans-serif; color: #222; max-width: 600px; margin: 0 auto; padding: 24px;">
+  <h1 style="font-size: 22px; font-weight: bold;">Payment Received</h1>
+  <p>Thank you, {{ user.name or user.email }}. We have received your payment.</p>
+  <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+    <tr>
+      <td style="padding: 8px 0; color: #555;">Amount</td>
+      <td style="padding: 8px 0; font-weight: bold;">PKR {{ invoice.amount }}</td>
+    </tr>
+    <tr>
+      <td style="padding: 8px 0; color: #555;">Invoice</td>
+      <td style="padding: 8px 0;">#{{ invoice.id }}</td>
+    </tr>
+    <tr>
+      <td style="padding: 8px 0; color: #555;">Plan</td>
+      <td style="padding: 8px 0;">{{ plan.name }}</td>
+    </tr>
+  </table>
+  <hr style="border: none; border-top: 1px solid #ddd; margin: 24px 0;">
+  <p style="font-size: 13px; color: #666;">Keep this email as your receipt.</p>
+</body>
+</html>

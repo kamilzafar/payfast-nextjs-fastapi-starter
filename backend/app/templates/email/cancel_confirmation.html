@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Cancellation Confirmed</title></head>
+<body style="font-family: Arial, sans-serif; color: #222; max-width: 600px; margin: 0 auto; padding: 24px;">
+  <h1 style="font-size: 22px; font-weight: bold;">Cancellation Confirmed</h1>
+  <p>Hi {{ user.name or user.email }},</p>
+  <p>
+    We have received your cancellation request for your <strong>{{ plan.name }}</strong> subscription.
+  </p>
+  <p>
+    Your subscription will remain active until <strong>{{ period_end }}</strong>,
+    after which it will not renew.
+  </p>
+  <hr style="border: none; border-top: 1px solid #ddd; margin: 24px 0;">
+  <p style="font-size: 13px; color: #666;">
+    If you change your mind, you can reactivate your subscription before that date.
+  </p>
+</body>
+</html>

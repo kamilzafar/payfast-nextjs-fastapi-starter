@@ -1,0 +1,8 @@
+Your Subscription is Past Due
+
+Hi {{ user.name or user.email }},
+
+Your {{ plan.name }} subscription payment is overdue.
+Pay within {{ remaining_days }} day{% if remaining_days != 1 %}s{% endif %} to avoid cancellation.
+
+Pay here: {{ pay_url }}

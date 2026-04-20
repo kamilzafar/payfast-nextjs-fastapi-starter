@@ -1,0 +1,36 @@
+// SKIPPED — gated on PayFast UAT credentials.
+//
+// To activate:
+//   1. Rename this file from `payment.spec.ts.skip` → `payment.spec.ts`.
+//   2. Export PAYFAST_MERCHANT_ID, PAYFAST_SECURED_KEY, PAYFAST_BASE_URL
+//      (UAT: https://ipguat.apps.net.pk) in the shell / CI secrets.
+//   3. Seed a test plan in the dev DB (`make seed` already does this).
+//   4. Run `pnpm e2e` — the test will drive a full hosted-redirect flow.
+//
+// WHAT THIS WILL COVER WHEN ENABLED
+// ---------------------------------
+// 1. Create user + log in (shared helper with smoke.spec.ts).
+// 2. GET /api/v1/plans via the pricing page; click "Subscribe" on the
+//    basic plan.
+// 3. Follow the redirect to /checkout/initiate, which submits the
+//    auto-POST form to PAYFAST_BASE_URL.
+// 4. In the PayFast hosted page, enter UAT test card details and
+//    complete the 3DS / OTP challenge simulation.
+// 5. Assert we land on /checkout/success?invoice=... with a paid state.
+// 6. Back in the app, /dashboard shows an active subscription and
+//    /dashboard/invoices lists the paid invoice.
+// 7. (Optional) Call /webhooks/payfast with a signed stub payload to
+//    verify IPN is idempotent against the success-redirect updates.
+//
+// Blocked on:
+//   - PayFast UAT merchant credentials from Bank AlFalah (protocol guesses
+//     in backend/app/services/payfast/ still need real verification — see
+//     the 7 TODOs documented in README.md).
+//   - Deterministic UAT card numbers (PayFast publishes these only to
+//     merchants, not in public docs).
+
+import { expect, test } from "@playwright/test";
+
+test.skip("full PayFast hosted checkout — TODO when UAT creds land", async () => {
+  expect(true).toBe(true);
+});

@@ -1,0 +1,9 @@
+Subscription Canceled
+
+Hi {{ user.name or user.email }},
+
+Your {{ plan.name }} subscription has been canceled due to non-payment.
+
+If you would like to reactivate your subscription, you can do so at any time from your account.
+
+If you believe this is an error, please contact our support team.

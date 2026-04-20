@@ -1,0 +1,6 @@
+Welcome, {{ user.name or user.email }}.
+
+Your {{ plan.name }} subscription is now active.
+Your subscription is active until {{ period_end }}.
+
+If you have any questions, contact our support team.

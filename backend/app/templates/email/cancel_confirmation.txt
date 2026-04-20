@@ -1,0 +1,10 @@
+Cancellation Confirmed
+
+Hi {{ user.name or user.email }},
+
+We have received your cancellation request for your {{ plan.name }} subscription.
+
+Your subscription will remain active until {{ period_end }},
+after which it will not renew.
+
+If you change your mind, you can reactivate your subscription before that date.

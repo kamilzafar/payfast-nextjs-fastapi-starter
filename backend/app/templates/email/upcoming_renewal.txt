@@ -1,0 +1,9 @@
+Your Subscription Renews Soon
+
+Hi {{ user.name or user.email }},
+
+Your {{ plan.name }} subscription renews on {{ due_at }}.
+
+Pay here: {{ pay_url }}
+
+If you have already arranged payment, you can ignore this notice.

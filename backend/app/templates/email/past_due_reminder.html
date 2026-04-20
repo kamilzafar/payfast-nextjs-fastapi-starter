@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Subscription Past Due</title></head>
+<body style="font-family: Arial, sans-serif; color: #222; max-width: 600px; margin: 0 auto; padding: 24px;">
+  <h1 style="font-size: 22px; font-weight: bold;">Your Subscription is Past Due</h1>
+  <p>Hi {{ user.name or user.email }},</p>
+  <p>
+    Your <strong>{{ plan.name }}</strong> subscription payment is overdue.
+    Pay within <strong>{{ remaining_days }} day{% if remaining_days != 1 %}s{% endif %}</strong>
+    to avoid cancellation.
+  </p>
+  <p style="margin: 24px 0;">
+    <a href="{{ pay_url }}"
+       style="background: #d9534f; color: #fff; text-decoration: none; padding: 12px 24px; border-radius: 4px; font-size: 15px;">
+      Pay Now to Keep Your Subscription
+    </a>
+  </p>
+  <hr style="border: none; border-top: 1px solid #ddd; margin: 24px 0;">
+  <p style="font-size: 13px; color: #666;">Pay URL: {{ pay_url }}</p>
+</body>
+</html>

@@ -1,0 +1,87 @@
+# -----------------------------------------------------------------------------
+# Environment / secrets
+# -----------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+!*.env.example
+
+# -----------------------------------------------------------------------------
+# Python
+# -----------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Test / type / lint caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.hypothesis/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+*.egg
+pip-wheel-metadata/
+
+# NOTE: uv.lock IS committed. Do not add it here.
+
+# -----------------------------------------------------------------------------
+# Node.js / Next.js / pnpm
+# -----------------------------------------------------------------------------
+node_modules/
+.pnpm-store/
+.pnpm-debug.log*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Next.js build output
+.next/
+out/
+
+# Turborepo
+.turbo/
+
+# NOTE: pnpm-lock.yaml IS committed. Do not add it here.
+# NOTE: next-env.d.ts IS committed (Next.js generates it but expects it tracked).
+
+# -----------------------------------------------------------------------------
+# Editor / OS
+# -----------------------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# -----------------------------------------------------------------------------
+# Docker / logs / misc
+# -----------------------------------------------------------------------------
+*.log
+logs/
+.cache/
+coverage/
+tmp/
+temp/
+
+# Local developer overrides
+*.local

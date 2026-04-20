@@ -1,0 +1,9 @@
+Payment Received
+
+Thank you, {{ user.name or user.email }}. We have received your payment.
+
+Amount:  PKR {{ invoice.amount }}
+Invoice: #{{ invoice.id }}
+Plan:    {{ plan.name }}
+
+Keep this email as your receipt.

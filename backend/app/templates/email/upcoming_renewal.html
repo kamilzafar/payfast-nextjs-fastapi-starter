@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Upcoming Renewal</title></head>
+<body style="font-family: Arial, sans-serif; color: #222; max-width: 600px; margin: 0 auto; padding: 24px;">
+  <h1 style="font-size: 22px; font-weight: bold;">Your Subscription Renews Soon</h1>
+  <p>Hi {{ user.name or user.email }},</p>
+  <p>
+    Your <strong>{{ plan.name }}</strong> subscription is due for renewal on
+    <strong>{{ due_at }}</strong>.
+  </p>
+  <p style="margin: 24px 0;">
+    <a href="{{ pay_url }}"
+       style="background: #0070f3; color: #fff; text-decoration: none; padding: 12px 24px; border-radius: 4px; font-size: 15px;">
+      Pay Now
+    </a>
+  </p>
+  <p>If you have already arranged payment, you can ignore this notice.</p>
+  <hr style="border: none; border-top: 1px solid #ddd; margin: 24px 0;">
+  <p style="font-size: 13px; color: #666;">Pay URL: {{ pay_url }}</p>
+</body>
+</html>

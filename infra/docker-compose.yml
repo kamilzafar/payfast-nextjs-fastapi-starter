@@ -1,0 +1,93 @@
+# Local development infrastructure for PayFast subscription billing platform.
+#
+# Bring up:   docker compose -f infra/docker-compose.yml up -d
+# Tear down:  docker compose -f infra/docker-compose.yml down
+# Destroy:    docker compose -f infra/docker-compose.yml down -v   (wipes pg_data)
+#
+# Services:
+#   postgres  :5432   primary data store
+#   mailhog   :1025   SMTP sink (UI on :8025)
+#   adminer   :8080   DB GUI
+#
+# Backend (FastAPI) and frontend (Next.js) run on the host, not inside compose,
+# so hot-reload and IDE tooling behave as expected. The services below are the
+# stateful/dev-support pieces only.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: payfast_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: payfast
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d payfast"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - payfast_net
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: payfast_mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI
+    networks:
+      - payfast_net
+
+  adminer:
+    image: adminer:latest
+    container_name: payfast_adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - payfast_net
+
+  # --------------------------------------------------------------------------
+  # Optional: run ngrok inside compose to tunnel the backend's IPN endpoint.
+  # Most devs prefer running ngrok directly on the host (`ngrok http 8000`)
+  # because the backend itself runs on the host. Uncomment this block only if
+  # you want the tunnel managed by compose (e.g. on a headless dev box).
+  #
+  # You'll need an authtoken from https://dashboard.ngrok.com. Set it in a
+  # local .env beside this file as NGROK_AUTHTOKEN=... and NGROK_TARGET=
+  # host.docker.internal:8000 (or your backend's reachable address).
+  #
+  # ngrok:
+  #   image: ngrok/ngrok:latest
+  #   container_name: payfast_ngrok
+  #   restart: unless-stopped
+  #   command: ["http", "${NGROK_TARGET:-host.docker.internal:8000}"]
+  #   environment:
+  #     NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+  #   ports:
+  #     - "4040:4040"   # ngrok inspector UI
+  #   extra_hosts:
+  #     - "host.docker.internal:host-gateway"
+  #   networks:
+  #     - payfast_net
+  # --------------------------------------------------------------------------
+
+volumes:
+  pg_data:
+    name: payfast_pg_data
+
+networks:
+  payfast_net:
+    driver: bridge

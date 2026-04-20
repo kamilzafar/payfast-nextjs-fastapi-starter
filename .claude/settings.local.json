@@ -2,7 +2,25 @@
   "permissions": {
     "allow": [
       "WebFetch(domain:gopayfast.com)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(pnpm --version)",
+      "Bash(pnpm test *)",
+      "Bash(pnpm build *)",
+      "Bash(pnpm lint *)",
+      "Bash(uv run *)",
+      "Bash(JWT_SECRET=test uv run python -c \"from app.services.payfast import get_access_token, build_checkout_payload, verify_ipn; print\\('imports OK'\\)\")",
+      "Bash(npx eslint *)",
+      "Bash(docker info *)",
+      "Bash(where docker *)",
+      "Bash(docker context ls *)",
+      "Bash(docker -H npipe:////./pipe/docker_engine ps)",
+      "Bash(powershell *)",
+      "Bash(docker exec *)",
+      "Bash(grep -v \"^$\")",
+      "Bash(uv sync *)",
+      "Bash(JWT_SECRET=test uv run pytest --tb=no -q)",
+      "Bash(docker compose *)",
+      "Bash(JWT_SECRET=test uv run pytest --tb=short)"
     ]
   }
 }
