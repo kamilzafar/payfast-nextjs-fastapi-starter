@@ -41,25 +41,23 @@ async def get_access_token(
 ) -> AccessToken:
     """POST form-encoded credentials to the PayFast token endpoint.
 
-    Expected request payload (best-known from integration docs):
-      MERCHANT_ID   — merchant identifier
-      SECURED_KEY   — merchant secret / API key
-      TXNAMT        — transaction amount in major units (PKR), 2 decimal places
-      BASKET_ID     — merchant-side transaction reference
-      CURRENCY_CODE — ISO currency code (default PKR)
+    Contract (from PayFast's payment.php sample, Apr 2026):
+      Method: POST
+      Content-Type: application/x-www-form-urlencoded
+      Body fields (order matters per sample):
+        MERCHANT_ID, SECURED_KEY, BASKET_ID, TXNAMT (major units, 2dp), CURRENCY_CODE
 
-    Returns an AccessToken on success.
-    Raises PayFastAuthError on non-2xx status or missing TOKEN in response.
+    Response: JSON with ACCESS_TOKEN key.
+
+    Raises PayFastAuthError on non-2xx status or missing ACCESS_TOKEN.
     Raises PayFastError on network/timeout errors.
-
-    TODO: Confirm exact field names against live PayFast UAT response.
     """
     url = f"{base_url}{TOKEN_PATH}"
     form_data: dict[str, Any] = {
         "MERCHANT_ID": merchant_id,
         "SECURED_KEY": secured_key,
-        "TXNAMT": _minor_to_major(amount_minor),
         "BASKET_ID": basket_id,
+        "TXNAMT": _minor_to_major(amount_minor),
         "CURRENCY_CODE": currency,
     }
 
@@ -68,7 +66,11 @@ async def get_access_token(
         http_client = httpx.AsyncClient(timeout=timeout)
 
     try:
-        response = await http_client.post(url, data=form_data)  # type: ignore[union-attr]
+        response = await http_client.post(  # type: ignore[union-attr]
+            url,
+            data=form_data,
+            headers={"User-Agent": "CURL/PHP PayFast Example"},
+        )
     except httpx.TimeoutException as exc:
         raise PayFastError(f"Request to PayFast token endpoint timed out: {exc}") from exc
     except httpx.HTTPError as exc:
@@ -89,11 +91,12 @@ async def get_access_token(
             f"PayFast token response was not valid JSON: {response.text}"
         ) from exc
 
-    # TODO: Confirm exact key name — "TOKEN" is assumed from common PayFast docs.
-    token_value: str | None = body.get("TOKEN") or body.get("token")
+    token_value: str | None = (
+        body.get("ACCESS_TOKEN") or body.get("TOKEN") or body.get("token")
+    )
     if not token_value:
         raise PayFastAuthError(
-            f"PayFast response missing TOKEN field. Response body: {body}"
+            f"PayFast response missing ACCESS_TOKEN field. Response body: {body}"
         )
 
     # TODO: Parse expires_at if PayFast returns an expiry field.

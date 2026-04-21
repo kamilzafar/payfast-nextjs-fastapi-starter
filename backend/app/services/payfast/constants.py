@@ -1,23 +1,20 @@
 """PayFast gateway constants.
 
-TODO: Verify all URL paths against live PayFast UAT documentation.
-      Update when UAT credentials land (base URL: https://ipguat.apps.net.pk).
-      Production base URL is configurable via PAYFAST_BASE_URL in settings.
+Verified from PayFast's Merchant Integration Guide 2.3 and payment.php (Apr 2026).
+
+Host selection is via PAYFAST_BASE_URL in settings:
+  UAT:  https://ipguat.apps.net.pk
+  Live: https://ipg1.apps.net.pk
 """
 
 from __future__ import annotations
 
-# TODO: Verify this path against live PayFast UAT response.
-#       Known endpoint pattern from integration docs — confirm exact casing.
-TOKEN_PATH: str = "/Ecommerce/api/Transaction/GetAccessToken"
 
-# TODO: Verify this path against live PayFast UAT response.
-#       POST form fields here to initiate the hosted checkout redirect.
+TOKEN_PATH: str = "/Ecommerce/api/Transaction/GetAccessToken"
 POST_TRANSACTION_PATH: str = "/Ecommerce/api/Transaction/PostTransaction"
 
 # Default HTTP timeout in seconds for all PayFast API calls.
 DEFAULT_TIMEOUT: float = 10.0
 
-# TODO: Confirm the exact IPN signature header name PayFast sends.
-#       Based on common PayFast integration guides — verify when live IPN is tested.
-IPN_SIGNATURE_HEADER: str = "X-PayFast-Signature"
+# SUCCESS: PayFast's err_code for completed transactions.
+SUCCESS_ERR_CODE: str = "000"

@@ -39,13 +39,15 @@ class Settings(BaseSettings):
     # CORS — JSON list in env, e.g. ["http://localhost:3000"]
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
 
-    # PayFast (phase 2)
+    # PayFast — UAT: https://ipguat.apps.net.pk  /  Live: https://ipg1.apps.net.pk
     PAYFAST_MERCHANT_ID: str = ""
     PAYFAST_SECURED_KEY: str = ""
-    PAYFAST_BASE_URL: str = ""
+    PAYFAST_MERCHANT_NAME: str = "PayFast Subscriptions"
+    PAYFAST_BASE_URL: str = "https://ipguat.apps.net.pk"
     PAYFAST_RETURN_URL: str = "http://localhost:8000/payfast/return"
     PAYFAST_CANCEL_URL: str = "http://localhost:8000/payfast/cancel"
-    PAYFAST_WEBHOOK_SECRET: str = ""
+    # IPN endpoint — PayFast POSTs payment notifications here. Must be public.
+    PAYFAST_CHECKOUT_URL: str = "http://localhost:8000/webhooks/payfast"
 
     # Frontend (phase 3 — redirect targets)
     FRONTEND_URL: str = "http://localhost:3000"

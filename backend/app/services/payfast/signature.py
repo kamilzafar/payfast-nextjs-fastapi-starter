@@ -1,17 +1,18 @@
-"""PayFast IPN signature verification.
+"""PayFast IPN validation-hash verification.
 
-TODO: PayFast's exact IPN signature scheme is not cleanly documented
-      in public resources.  This implementation uses HMAC-SHA256 with
-      the shared webhook secret (settings.PAYFAST_WEBHOOK_SECRET) and
-      the X-PayFast-Signature header.
+Per PayFast's IPN Integration Document (Apr 2026), PayFast authenticates
+IPN callbacks with a `validation_hash` field IN the body:
 
-      When live IPN samples are received:
-        1. Log the raw headers and body.
-        2. Compare against this implementation.
-        3. Update IPN_SIGNATURE_HEADER and the HMAC computation here
-           if PayFast uses a different algorithm (e.g. MD5, different header).
+    validation_hash = SHA256(
+        f"{basket_id}|{secured_key}|{merchant_id}|{err_code}"
+    ).hexdigest()
 
-      This function is the SINGLE place to change IPN verification logic.
+Example from the docs:
+    "BAS-01|jdnkaabcks|102|000"
+    -> e8192a7554dd699975adf39619c703a492392edf5e416a61e183866ecdf6a2a2
+
+There is no header-based HMAC. The secured_key that's used for
+GetAccessToken is the same key used for IPN validation.
 """
 
 from __future__ import annotations
@@ -20,41 +21,45 @@ import hashlib
 import hmac
 from collections.abc import Mapping
 
-from app.services.payfast.constants import IPN_SIGNATURE_HEADER
+
+def compute_validation_hash(
+    basket_id: str,
+    secured_key: str,
+    merchant_id: str,
+    err_code: str,
+) -> str:
+    """Compute the SHA-256 validation hash PayFast expects.
+
+    Order is fixed by the docs: basket_id | secured_key | merchant_id | err_code.
+    """
+    raw = f"{basket_id}|{secured_key}|{merchant_id}|{err_code}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 def verify_ipn(
-    raw_body: bytes,
-    headers: Mapping[str, str],
-    secret: str,
+    payload: Mapping[str, str],
+    secured_key: str,
+    merchant_id: str,
 ) -> bool:
-    """Verify the authenticity of a PayFast IPN notification.
+    """Verify an IPN payload's `validation_hash` against the expected value.
 
-    Algorithm (current implementation):
-      1. Read the IPN_SIGNATURE_HEADER from headers (case-insensitive lookup).
-      2. Compute HMAC-SHA256(raw_body, secret.encode('utf-8')).
-      3. Compare using hmac.compare_digest() for constant-time equality.
+    Returns True iff all four required fields are present and the received
+    `validation_hash` matches the locally-computed SHA-256. Uses constant-time
+    comparison.
 
-    Returns True if signature matches, False otherwise (including missing header).
-
-    TODO: Verify exact algorithm against live PayFast IPN samples.
-          Update IPN_SIGNATURE_HEADER in constants.py if the header name differs.
+    Missing or blank basket_id / err_code / validation_hash -> False.
     """
-    # Case-insensitive header lookup (HTTP/1.1 headers are case-insensitive).
-    header_lower = IPN_SIGNATURE_HEADER.lower()
-    received_signature: str | None = None
-    for key, value in headers.items():
-        if key.lower() == header_lower:
-            received_signature = value
-            break
+    basket_id = (payload.get("basket_id") or "").strip()
+    err_code = (payload.get("err_code") or "").strip()
+    received = (payload.get("validation_hash") or "").strip().lower()
 
-    if received_signature is None:
+    if not basket_id or not err_code or not received:
         return False
 
-    expected = hmac.new(
-        secret.encode("utf-8"),
-        raw_body,
-        hashlib.sha256,
-    ).hexdigest()
-
-    return hmac.compare_digest(expected, received_signature)
+    expected = compute_validation_hash(
+        basket_id=basket_id,
+        secured_key=secured_key,
+        merchant_id=merchant_id,
+        err_code=err_code,
+    )
+    return hmac.compare_digest(expected, received)

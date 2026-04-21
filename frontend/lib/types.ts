@@ -8,7 +8,8 @@
 import { z } from "zod";
 
 export const UserSchema = z.object({
-  id: z.string(),
+  // Backend uses int PKs; accept number or numeric string.
+  id: z.union([z.number().int(), z.string()]),
   email: z.string().email(),
   is_active: z.boolean().default(true),
   is_verified: z.boolean().default(false),
@@ -21,14 +22,16 @@ export const UserSchema = z.object({
 export type User = z.infer<typeof UserSchema>;
 
 export const PlanSchema = z.object({
-  id: z.string(),
+  // Backend uses int PKs. Accept either int or numeric string for safety.
+  id: z.union([z.number().int(), z.string()]),
   name: z.string(),
   description: z.string().nullable().optional(),
   // Backend sends amounts as integer minor units (paisa). We keep the name
   // explicit so UI code can't accidentally treat it as rupees.
   amount_minor: z.number().int(),
   currency: z.string().default("PKR"),
-  interval: z.enum(["month", "year"]).default("month"),
+  // Backend emits the raw enum value ("monthly" | "yearly"). Stay permissive.
+  interval: z.string().default("monthly"),
   interval_count: z.number().int().positive().default(1),
   // Features are a simple string list for now; richer shape comes in phase 2.
   features: z.array(z.string()).default([]),

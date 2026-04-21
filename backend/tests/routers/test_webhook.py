@@ -1,9 +1,14 @@
 """Tests for POST /webhooks/payfast IPN endpoint.
 
-TDD: written BEFORE implementation — all should be RED initially.
+IPN contract (Apr 2026 docs):
+  - PayFast POSTs form-urlencoded or JSON body to our CHECKOUT_URL
+  - Auth via validation_hash field in body (not a header)
+  - err_code '000' means success
 """
 
 from __future__ import annotations
+
+from urllib.parse import urlencode
 
 import pytest
 from httpx import AsyncClient
@@ -18,7 +23,6 @@ async def _seed_plan_and_sub(
     email: str,
     plan_name: str,
 ) -> tuple[int, int, str]:
-    """Returns (subscription_id, invoice_id, basket_id)."""
     from app.models.plan import Plan, PlanInterval  # noqa: PLC0415
 
     plan = Plan(
@@ -44,71 +48,172 @@ async def _seed_plan_and_sub(
     return body["subscription_id"], body["invoice_id"], body["basket_id"]
 
 
+def _ipn_body(
+    basket_id: str,
+    *,
+    err_code: str = "000",
+    err_msg: str = "Transaction has been completed.",
+    transaction_id: str = "TXN-UNIT-001",
+) -> bytes:
+    """Build a form-urlencoded IPN body. validation_hash is added by the test
+    after patching verify_ipn, so its value is irrelevant here."""
+    return urlencode(
+        {
+            "basket_id": basket_id,
+            "err_code": err_code,
+            "err_msg": err_msg,
+            "transaction_id": transaction_id,
+            "validation_hash": "stubbed-by-monkeypatch",
+            "transaction_amount": "1500.00",
+            "transaction_currency": "PKR",
+        }
+    ).encode()
+
+
 @pytest.mark.asyncio
-async def test_webhook_valid_signature_marks_paid(
+async def test_webhook_valid_hash_marks_paid(
     client: AsyncClient,
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Valid IPN: invoice becomes paid, subscription becomes active, period extended."""
+    """Valid IPN (err_code=000): invoice paid, sub active, period extended."""
     import app.routers.webhooks_payfast as wh_module  # noqa: PLC0415
     from app.models.invoice import Invoice, InvoiceStatus  # noqa: PLC0415
     from app.models.subscription import Subscription, SubscriptionStatus  # noqa: PLC0415
     from sqlalchemy import select  # noqa: PLC0415
 
-    monkeypatch.setattr(wh_module, "verify_ipn", lambda *args, **kwargs: True)
+    monkeypatch.setattr(wh_module, "verify_ipn", lambda *a, **kw: True)
 
     sub_id, inv_id, basket_id = await _seed_plan_and_sub(
         client, db_session, "ipn_ok@example.com", "PlanWebhookOk"
     )
-    txn_id = "TXN123ABC"
+    txn_id = "TXN-PAID-001"
 
-    payload = f"basket_id={basket_id}&txn_id={txn_id}&status=paid".encode()
     r = await client.post(
         "/webhooks/payfast",
-        content=payload,
-        headers={
-            "Content-Type": "application/x-www-form-urlencoded",
-            "X-PayFast-Signature": "fake-sig",
-        },
+        content=_ipn_body(basket_id, transaction_id=txn_id),
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "ok"
 
-    # Verify DB state — invoice paid
-    await db_session.refresh(
-        (await db_session.execute(select(Invoice).where(Invoice.id == inv_id))).scalar_one()
-    )
-    inv = (await db_session.execute(select(Invoice).where(Invoice.id == inv_id))).scalar_one()
+    inv = (
+        await db_session.execute(select(Invoice).where(Invoice.id == inv_id))
+    ).scalar_one()
+    await db_session.refresh(inv)
     assert inv.status == InvoiceStatus.paid
     assert inv.payfast_txn_id == txn_id
 
-    # Verify DB state — subscription active
-    sub = (await db_session.execute(select(Subscription).where(Subscription.id == sub_id))).scalar_one()
+    sub = (
+        await db_session.execute(select(Subscription).where(Subscription.id == sub_id))
+    ).scalar_one()
+    await db_session.refresh(sub)
     assert sub.status == SubscriptionStatus.active
     assert sub.current_period_end is not None
 
 
 @pytest.mark.asyncio
-async def test_webhook_invalid_signature_rejected(
+async def test_webhook_failed_err_code_records_failed_attempt(
     client: AsyncClient,
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Invalid signature should return 403."""
+    """err_code != '000' records a failed payment_attempt; invoice stays open."""
     import app.routers.webhooks_payfast as wh_module  # noqa: PLC0415
+    from app.models.invoice import Invoice, InvoiceStatus  # noqa: PLC0415
+    from app.models.payment_attempt import PaymentAttempt, PaymentAttemptStatus  # noqa: PLC0415
+    from sqlalchemy import select  # noqa: PLC0415
 
-    monkeypatch.setattr(wh_module, "verify_ipn", lambda *args, **kwargs: False)
+    monkeypatch.setattr(wh_module, "verify_ipn", lambda *a, **kw: True)
+
+    _, inv_id, basket_id = await _seed_plan_and_sub(
+        client, db_session, "ipn_fail@example.com", "PlanWebhookFail"
+    )
 
     r = await client.post(
         "/webhooks/payfast",
-        content=b"basket_id=abc&txn_id=xyz",
-        headers={
-            "Content-Type": "application/x-www-form-urlencoded",
-            "X-PayFast-Signature": "bad-sig",
-        },
+        content=_ipn_body(
+            basket_id,
+            err_code="101",
+            err_msg="Transaction declined by issuer",
+            transaction_id="TXN-FAIL-001",
+        ),
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    assert r.status_code == 200
+
+    inv = (
+        await db_session.execute(select(Invoice).where(Invoice.id == inv_id))
+    ).scalar_one()
+    await db_session.refresh(inv)
+    assert inv.status == InvoiceStatus.open
+
+    attempts = (
+        await db_session.execute(
+            select(PaymentAttempt).where(PaymentAttempt.invoice_id == inv_id)
+        )
+    ).scalars().all()
+    assert any(a.status == PaymentAttemptStatus.failed for a in attempts)
+
+
+@pytest.mark.asyncio
+async def test_webhook_invalid_hash_rejected(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Invalid validation_hash should return 403."""
+    import app.routers.webhooks_payfast as wh_module  # noqa: PLC0415
+
+    monkeypatch.setattr(wh_module, "verify_ipn", lambda *a, **kw: False)
+
+    r = await client.post(
+        "/webhooks/payfast",
+        content=_ipn_body("BAS-01"),
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
     assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_webhook_json_body_accepted(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PayFast may send the IPN as JSON — handler must parse both."""
+    import app.routers.webhooks_payfast as wh_module  # noqa: PLC0415
+    import json  # noqa: PLC0415
+    from app.models.invoice import Invoice, InvoiceStatus  # noqa: PLC0415
+    from sqlalchemy import select  # noqa: PLC0415
+
+    monkeypatch.setattr(wh_module, "verify_ipn", lambda *a, **kw: True)
+
+    _, inv_id, basket_id = await _seed_plan_and_sub(
+        client, db_session, "ipn_json@example.com", "PlanWebhookJson"
+    )
+
+    body = json.dumps(
+        {
+            "basket_id": basket_id,
+            "err_code": "000",
+            "err_msg": "OK",
+            "transaction_id": "TXN-JSON-001",
+            "validation_hash": "stub",
+        }
+    ).encode()
+
+    r = await client.post(
+        "/webhooks/payfast",
+        content=body,
+        headers={"Content-Type": "application/json"},
+    )
+    assert r.status_code == 200
+
+    inv = (
+        await db_session.execute(select(Invoice).where(Invoice.id == inv_id))
+    ).scalar_one()
+    await db_session.refresh(inv)
+    assert inv.status == InvoiceStatus.paid
 
 
 @pytest.mark.asyncio
@@ -117,31 +222,25 @@ async def test_webhook_duplicate_event_idempotent(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Sending same IPN twice returns 200 both times; state only changed once."""
+    """Duplicate IPN (same transaction_id) is acknowledged without re-processing."""
     import app.routers.webhooks_payfast as wh_module  # noqa: PLC0415
-    from app.models.invoice import Invoice  # noqa: PLC0415
-    from sqlalchemy import select, func  # noqa: PLC0415
     from app.models.webhook_event import WebhookEvent  # noqa: PLC0415
+    from sqlalchemy import select, func  # noqa: PLC0415
 
-    monkeypatch.setattr(wh_module, "verify_ipn", lambda *args, **kwargs: True)
+    monkeypatch.setattr(wh_module, "verify_ipn", lambda *a, **kw: True)
 
-    sub_id, inv_id, basket_id = await _seed_plan_and_sub(
+    _, _, basket_id = await _seed_plan_and_sub(
         client, db_session, "ipn_dupe@example.com", "PlanWebhookDupe"
     )
-    txn_id = "TXN_DUPE_001"
-    payload = f"basket_id={basket_id}&txn_id={txn_id}&status=paid".encode()
-    headers = {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "X-PayFast-Signature": "fake-sig",
-    }
+    txn_id = "TXN-DUPE-001"
+    body = _ipn_body(basket_id, transaction_id=txn_id)
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
-    r1 = await client.post("/webhooks/payfast", content=payload, headers=headers)
+    r1 = await client.post("/webhooks/payfast", content=body, headers=headers)
+    r2 = await client.post("/webhooks/payfast", content=body, headers=headers)
     assert r1.status_code == 200
-
-    r2 = await client.post("/webhooks/payfast", content=payload, headers=headers)
     assert r2.status_code == 200
 
-    # Only one webhook_event row for this txn_id
     count = (
         await db_session.execute(
             select(func.count(WebhookEvent.id)).where(
@@ -153,50 +252,39 @@ async def test_webhook_duplicate_event_idempotent(
 
 
 @pytest.mark.asyncio
-async def test_webhook_atomic(
+async def test_webhook_atomic_on_db_failure(
     client: AsyncClient,
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """If DB commit fails mid-transaction, nothing should be persisted."""
+    """DB failure mid-transaction: nothing is persisted."""
     import app.routers.webhooks_payfast as wh_module  # noqa: PLC0415
+    import app.repositories.webhook_events as we_repo  # noqa: PLC0415
     from app.models.invoice import Invoice, InvoiceStatus  # noqa: PLC0415
     from sqlalchemy import select  # noqa: PLC0415
-    import app.repositories.webhook_events as we_repo  # noqa: PLC0415
 
-    monkeypatch.setattr(wh_module, "verify_ipn", lambda *args, **kwargs: True)
+    monkeypatch.setattr(wh_module, "verify_ipn", lambda *a, **kw: True)
 
-    sub_id, inv_id, basket_id = await _seed_plan_and_sub(
+    _, inv_id, basket_id = await _seed_plan_and_sub(
         client, db_session, "ipn_atomic@example.com", "PlanWebhookAtomic"
     )
-    txn_id = "TXN_ATOMIC_001"
 
-    # Patch try_insert to raise an exception to simulate mid-TX failure
-    original_try_insert = we_repo.try_insert
-
-    async def _exploding_try_insert(db, provider_event_id, payload):
+    async def _explode(db, provider_event_id, payload):
         raise RuntimeError("Simulated DB failure")
 
-    monkeypatch.setattr(we_repo, "try_insert", _exploding_try_insert)
+    monkeypatch.setattr(we_repo, "try_insert", _explode)
 
-    payload = f"basket_id={basket_id}&txn_id={txn_id}&status=paid".encode()
-    headers_dict = {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "X-PayFast-Signature": "fake-sig",
-    }
-
-    # The RuntimeError raised by _exploding_try_insert propagates through the ASGI
-    # transport (raise_app_exceptions=True) as an unhandled exception.
-    # We verify atomicity by confirming the invoice is NOT updated.
-    import httpx as _httpx  # noqa: PLC0415
     try:
-        await client.post("/webhooks/payfast", content=payload, headers=headers_dict)
-    except (RuntimeError, _httpx.HTTPStatusError, Exception):
+        await client.post(
+            "/webhooks/payfast",
+            content=_ipn_body(basket_id),
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+    except Exception:
         pass
 
-    # Invoice should still be open (nothing was committed)
-    await db_session.refresh(
-        (await db_session.execute(select(Invoice).where(Invoice.id == inv_id))).scalar_one()
-    )
-    inv = (await db_session.execute(select(Invoice).where(Invoice.id == inv_id))).scalar_one()
+    inv = (
+        await db_session.execute(select(Invoice).where(Invoice.id == inv_id))
+    ).scalar_one()
+    await db_session.refresh(inv)
     assert inv.status == InvoiceStatus.open

@@ -20,7 +20,10 @@
       "Bash(uv sync *)",
       "Bash(JWT_SECRET=test uv run pytest --tb=no -q)",
       "Bash(docker compose *)",
-      "Bash(JWT_SECRET=test uv run pytest --tb=short)"
+      "Bash(JWT_SECRET=test uv run pytest --tb=short)",
+      "Bash(where.exe winget *)",
+      "Bash(where.exe choco *)",
+      "Bash(git add *)"
     ]
   }
 }

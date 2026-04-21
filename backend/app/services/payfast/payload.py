@@ -1,28 +1,44 @@
 """Build the PayFast hosted-checkout POST payload.
 
+Field names and casing confirmed from PayFast's official `payment.php`
+sample (Merchant Integration Guide 2.3, Apr 2026).
+
 The returned dict is used to render a self-submitting HTML form that
 redirects the user to PayFast's hosted checkout page.
-
-TODO: Verify all field names against live PayFast UAT documentation.
-      POST_TRANSACTION_PATH and field names are based on best-known
-      integration guides — update when UAT credentials land.
 """
 
 from __future__ import annotations
 
+import secrets
 from datetime import datetime, timezone
 
 from app.models.invoice import Invoice
 from app.models.user import User
 
 
+MERCHANT_NAME_DEFAULT = "PayFast Subscriptions"
+VERSION = "MERCHANTCART-0.1"
+TRAN_TYPE = "ECOMM_PURCHASE"
+PROCCODE = "00"
+
+
 def _minor_to_major(amount_minor: int) -> str:
     """Convert paisa (minor units) to PKR string with 2 decimal places.
 
-    Example: 150000 → "1500.00"
+    Example: 150000 paisa -> "1500.00"
     """
     major = amount_minor / 100
     return f"{major:.2f}"
+
+
+def _build_signature(basket_id: str) -> str:
+    """Build the SIGNATURE field.
+
+    The SIGNATURE field in PayFast's checkout form is a merchant-chosen
+    correlation tag — PayFast's sample uses 'SOMERANDOM-STRING'. We generate
+    12 hex chars + '-' + basket_id so we can spot our own traffic.
+    """
+    return f"{secrets.token_hex(6)}-{basket_id}"
 
 
 def build_checkout_payload(
@@ -32,51 +48,45 @@ def build_checkout_payload(
     token: str,
     return_url: str,
     cancel_url: str,
+    checkout_url: str,
     merchant_id: str,
+    merchant_name: str = MERCHANT_NAME_DEFAULT,
+    create_recurring_token: bool = False,
 ) -> dict[str, str]:
     """Build the POST payload dict for PayFast's hosted checkout redirect.
 
-    Converts invoice.amount (integer paisa) to TXNAMT (PKR major units, 2dp).
+    Fields (from payment.php):
+      CURRENCY_CODE, MERCHANT_ID, MERCHANT_NAME, TOKEN, BASKET_ID, TXNAMT,
+      ORDER_DATE ("YYYY-MM-DD HH:MM:SS" UTC), SUCCESS_URL, FAILURE_URL,
+      CHECKOUT_URL (IPN endpoint), CUSTOMER_EMAIL_ADDRESS, CUSTOMER_MOBILE_NO,
+      SIGNATURE, VERSION="MERCHANTCART-0.1", TXNDESC, PROCCODE="00",
+      TRAN_TYPE="ECOMM_PURCHASE", STORE_ID="", RECURRING_TXN ("TRUE" or "").
 
-    Keys included (best-known from PayFast integration docs):
-      MERCHANT_ID             — merchant identifier
-      TOKEN                   — one-time access token from get_access_token()
-      TXNAMT                  — transaction amount in PKR (major units)
-      BASKET_ID               — merchant-side reference (invoice.basket_id)
-      ORDER_DATE              — ISO 8601 UTC timestamp
-      CURRENCY_CODE           — ISO currency (PKR)
-      CUSTOMER_EMAIL_ADDRESS  — user.email
-      CUSTOMER_MOBILE_NO      — user.phone (empty string if None)
-      SUCCESS_URL             — return_url (on successful payment)
-      FAILURE_URL             — cancel_url (on failure / cancellation)
-      SIGNATURE               — left blank per PayFast docs (TOKEN authenticates)
-      PROCCODE                — processing code (TODO: confirm value with PayFast)
-      TXNDESC                 — transaction description
-      CHECKOUT_URL            — TODO: confirm if needed by PayFast
-
-    TODO: Confirm exact field list and values against live PayFast UAT.
-    TODO: Confirm whether CHECKOUT_URL, PROCCODE are required or optional.
-    TODO: Confirm SIGNATURE handling — some integrations compute it; others leave blank.
+    SUCCESS_URL / FAILURE_URL: browser redirect after payment (UX).
+    CHECKOUT_URL: IPN callback PayFast POSTs to (server-to-server, auth via
+      validation_hash in the body).
     """
-    order_date = datetime.now(tz=timezone.utc).strftime("%Y%m%d%H%M%S")
+    order_date = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    basket_id = str(invoice.basket_id)
 
     return {
-        "MERCHANT_ID": merchant_id,
-        "TOKEN": token,
-        "TXNAMT": _minor_to_major(invoice.amount),
-        "BASKET_ID": str(invoice.basket_id),
-        "ORDER_DATE": order_date,
         "CURRENCY_CODE": "PKR",
-        "CUSTOMER_EMAIL_ADDRESS": user.email,
-        "CUSTOMER_MOBILE_NO": user.phone or "",
+        "MERCHANT_ID": merchant_id,
+        "MERCHANT_NAME": merchant_name,
+        "TOKEN": token,
+        "BASKET_ID": basket_id,
+        "TXNAMT": _minor_to_major(invoice.amount),
+        "ORDER_DATE": order_date,
         "SUCCESS_URL": return_url,
         "FAILURE_URL": cancel_url,
-        # TODO: Determine correct PROCCODE for standard purchases (e.g. "00")
-        "PROCCODE": "00",
-        # TODO: Confirm whether TXNDESC content is prescribed by PayFast
+        "CHECKOUT_URL": checkout_url,
+        "CUSTOMER_EMAIL_ADDRESS": user.email,
+        "CUSTOMER_MOBILE_NO": user.phone or "",
+        "SIGNATURE": _build_signature(basket_id),
+        "VERSION": VERSION,
         "TXNDESC": f"Invoice {invoice.id}",
-        # TODO: Confirm whether SIGNATURE must be computed or left blank
-        "SIGNATURE": "",
-        # TODO: Confirm whether CHECKOUT_URL is required and what it should contain
-        "CHECKOUT_URL": return_url,
+        "PROCCODE": PROCCODE,
+        "TRAN_TYPE": TRAN_TYPE,
+        "STORE_ID": "",
+        "RECURRING_TXN": "TRUE" if create_recurring_token else "",
     }

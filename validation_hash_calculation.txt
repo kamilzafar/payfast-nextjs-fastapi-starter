@@ -1,0 +1,33 @@
+Validation Hash Calculation
+
+
+To ensure data integrity, a validation hash must be generated using the following fields in a specific sequence:
+
+
+1. Basket ID
+2. Merchant Secured Key
+3. Merchant ID
+4. Error Code (received from PayFast)
+
+The string sequence should be in the following format:
+
+
+"your_basket_id|your_merchant_secret_key|your_merchant_id|payfast_err_code"
+
+
+Example:
+
+
+BAS-01|jdnkaabcks|102|000
+
+
+Calculate the SHA256 hash of the concatenated string:
+
+
+e8192a7554dd699975adf39619c703a492392edf5e416a61e183866ecdf6a2a2
+
+
+Note: The pipe "|" character is included in the string.
+
+
+To verify data integrity, compare the calculated hash with the value received from PayFast. Both values should match

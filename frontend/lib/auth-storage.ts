@@ -13,9 +13,25 @@
  */
 
 const ACCESS_TOKEN_KEY = "payfast.accessToken";
+const SESSION_COOKIE = "payfast.session";
 
 const isBrowser = (): boolean =>
   typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+
+function setSessionCookie(value: string): void {
+  if (typeof document === "undefined") return;
+  // Non-httpOnly sentinel; the edge proxy reads this to avoid bouncing
+  // authed users back to /login. The actual access token stays in localStorage.
+  // 7-day max-age roughly matches the refresh-token lifetime.
+  const maxAge = 60 * 60 * 24 * 7;
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${SESSION_COOKIE}=${value}; Path=/; Max-Age=${maxAge}; SameSite=Lax${secure}`;
+}
+
+function clearSessionCookie(): void {
+  if (typeof document === "undefined") return;
+  document.cookie = `${SESSION_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`;
+}
 
 export function getAccessToken(): string | null {
   if (!isBrowser()) return null;
@@ -31,6 +47,7 @@ export function setAccessToken(token: string): void {
   if (!isBrowser()) return;
   try {
     window.localStorage.setItem(ACCESS_TOKEN_KEY, token);
+    setSessionCookie("1");
   } catch {
     // Ignore — auth will fall back to a fresh login on next refresh.
   }
@@ -40,6 +57,7 @@ export function clearAccessToken(): void {
   if (!isBrowser()) return;
   try {
     window.localStorage.removeItem(ACCESS_TOKEN_KEY);
+    clearSessionCookie();
   } catch {
     // Ignore.
   }

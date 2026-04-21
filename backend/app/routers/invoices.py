@@ -115,7 +115,9 @@ async def checkout_invoice(
         token=access_token.token,
         return_url=settings.PAYFAST_RETURN_URL,
         cancel_url=settings.PAYFAST_CANCEL_URL,
+        checkout_url=settings.PAYFAST_CHECKOUT_URL,
         merchant_id=settings.PAYFAST_MERCHANT_ID,
+        merchant_name=settings.PAYFAST_MERCHANT_NAME,
     )
 
     action_url = f"{settings.PAYFAST_BASE_URL}{POST_TRANSACTION_PATH}"

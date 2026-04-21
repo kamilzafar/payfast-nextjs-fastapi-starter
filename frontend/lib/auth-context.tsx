@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchMe = useCallback(async (): Promise<User | null> => {
     try {
-      const raw = await api.get<unknown>("/users/me");
+      const raw = await api.get<unknown>("/me");
       const parsed = UserSchema.safeParse(raw);
       if (!parsed.success) {
         // Don't spam console in production, but this *is* a backend contract

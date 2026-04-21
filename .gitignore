@@ -85,3 +85,10 @@ temp/
 
 # Local developer overrides
 *.local
+
+# -----------------------------------------------------------------------------
+# PayFast proprietary reference docs (obtain directly from PayFast / Bank AlFalah)
+# -----------------------------------------------------------------------------
+*.pdf
+*.pptx
+# payment.php and validation_hash_calculation.txt ARE committed — see docs/README.md

@@ -42,11 +42,11 @@ def token_url() -> str:
 
 @pytest.mark.asyncio
 async def test_get_access_token_success(httpx_mock: HTTPXMock, token_url: str) -> None:
-    """A valid 200 response with a token field returns an AccessToken."""
+    """A valid 200 response with an ACCESS_TOKEN field returns an AccessToken."""
     httpx_mock.add_response(
         url=token_url,
         method="POST",
-        json={"TOKEN": "abc123", "RESPONSE_CODE": "00"},
+        json={"ACCESS_TOKEN": "abc123", "RESPONSE_CODE": "00"},
         status_code=200,
     )
 
@@ -115,7 +115,7 @@ async def test_get_access_token_missing_token_field(
         status_code=200,
     )
 
-    with pytest.raises(PayFastAuthError, match="TOKEN"):
+    with pytest.raises(PayFastAuthError, match="ACCESS_TOKEN"):
         await get_access_token(
             merchant_id=MERCHANT_ID,
             secured_key=SECURED_KEY,
@@ -148,11 +148,11 @@ async def test_get_access_token_timeout(httpx_mock: HTTPXMock, token_url: str) -
 async def test_get_access_token_sends_correct_form_fields(
     httpx_mock: HTTPXMock, token_url: str
 ) -> None:
-    """The POST must include MERCHANT_ID, SECURED_KEY, TXNAMT, BASKET_ID, CURRENCY_CODE."""
+    """Body must include MERCHANT_ID, SECURED_KEY, TXNAMT, BASKET_ID — and NOT CURRENCY_CODE."""
     httpx_mock.add_response(
         url=token_url,
         method="POST",
-        json={"TOKEN": "xyz789"},
+        json={"ACCESS_TOKEN": "xyz789"},
         status_code=200,
     )
 
@@ -169,15 +169,13 @@ async def test_get_access_token_sends_correct_form_fields(
     assert len(requests) == 1
     req = requests[0]
 
-    # Decode form body
     body = req.content.decode("utf-8")
     assert "MERCHANT_ID=test_merchant" in body
     assert "SECURED_KEY=test_key" in body
     assert "BASKET_ID=basket-abc-123" in body
-    assert "CURRENCY_CODE=PKR" in body
-    # Amount must be in major units (PKR), not paisa
-    # 150000 paisa = 1500.00 PKR
+    # 150000 paisa = 1500.00 PKR (major units)
     assert "TXNAMT=1500.00" in body
+    assert "CURRENCY_CODE=PKR" in body
 
 
 @pytest.mark.asyncio
@@ -188,7 +186,7 @@ async def test_get_access_token_accepts_injected_http_client(
     httpx_mock.add_response(
         url=token_url,
         method="POST",
-        json={"TOKEN": "injected-token"},
+        json={"ACCESS_TOKEN": "injected-token"},
         status_code=200,
     )
 

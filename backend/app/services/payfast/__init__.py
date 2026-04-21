@@ -18,12 +18,13 @@ from app.services.payfast.exceptions import (
     PayFastSignatureError,
 )
 from app.services.payfast.payload import build_checkout_payload
-from app.services.payfast.signature import verify_ipn
+from app.services.payfast.signature import compute_validation_hash, verify_ipn
 
 __all__ = [
     "get_access_token",
     "build_checkout_payload",
     "verify_ipn",
+    "compute_validation_hash",
     "PayFastError",
     "PayFastAuthError",
     "PayFastSignatureError",

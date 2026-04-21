@@ -1,14 +1,16 @@
 """Tests for build_checkout_payload().
 
-Written FIRST (TDD Red phase) before implementation exists.
+Field names and values confirmed from PayFast's payment.php sample
+(Merchant Integration Guide 2.3, Apr 2026).
+
 Uses in-memory SQLAlchemy model instances — no DB connection required.
 """
 
 from __future__ import annotations
 
 import os
+import re
 import uuid
-from datetime import datetime, timezone
 
 import pytest
 
@@ -19,9 +21,10 @@ from app.models.invoice import Invoice, InvoiceStatus
 from app.models.user import User
 
 
-# ---------------------------------------------------------------------------
-# Fixtures — build in-memory model instances, no session needed
-# ---------------------------------------------------------------------------
+RETURN_URL = "https://example.com/return"
+CANCEL_URL = "https://example.com/cancel"
+CHECKOUT_URL = "https://example.com/webhooks/payfast"
+
 
 @pytest.fixture()
 def sample_basket_id() -> uuid.UUID:
@@ -34,7 +37,7 @@ def sample_invoice(sample_basket_id: uuid.UUID) -> Invoice:
     inv.id = 42
     inv.subscription_id = 7
     inv.basket_id = sample_basket_id
-    inv.amount = 150000  # paisa (minor units)
+    inv.amount = 150000  # 1500.00 PKR in paisa
     inv.status = InvoiceStatus.open
     inv.due_at = None
     inv.paid_at = None
@@ -56,158 +59,131 @@ def sample_user() -> User:
     return user
 
 
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
-
-def test_build_checkout_payload_amount_conversion(
-    sample_invoice: Invoice, sample_user: User
-) -> None:
-    """150000 paisa must be converted to '1500.00' PKR for TXNAMT."""
-    payload = build_checkout_payload(
-        invoice=sample_invoice,
-        user=sample_user,
+def _call(invoice: Invoice, user: User, **overrides):
+    kwargs = dict(
+        invoice=invoice,
+        user=user,
         token="tok_abc",
-        return_url="https://example.com/return",
-        cancel_url="https://example.com/cancel",
+        return_url=RETURN_URL,
+        cancel_url=CANCEL_URL,
+        checkout_url=CHECKOUT_URL,
         merchant_id="MID123",
     )
+    kwargs.update(overrides)
+    return build_checkout_payload(**kwargs)
 
+
+def test_amount_conversion(sample_invoice, sample_user):
+    """150000 paisa -> '1500.00' PKR."""
+    payload = _call(sample_invoice, sample_user)
     assert payload["TXNAMT"] == "1500.00"
 
 
-def test_build_checkout_payload_includes_all_required_keys(
-    sample_invoice: Invoice, sample_user: User
-) -> None:
-    """Payload must contain all documented keys PayFast expects."""
+def test_includes_all_payment_php_keys(sample_invoice, sample_user):
+    """Every field from PayFast's payment.php sample must be present."""
     required_keys = {
-        "MERCHANT_ID",
-        "TOKEN",
-        "TXNAMT",
-        "BASKET_ID",
-        "ORDER_DATE",
         "CURRENCY_CODE",
+        "MERCHANT_ID",
+        "MERCHANT_NAME",
+        "TOKEN",
+        "BASKET_ID",
+        "TXNAMT",
+        "ORDER_DATE",
         "SUCCESS_URL",
         "FAILURE_URL",
+        "CHECKOUT_URL",
+        "CUSTOMER_EMAIL_ADDRESS",
+        "CUSTOMER_MOBILE_NO",
+        "SIGNATURE",
+        "VERSION",
+        "TXNDESC",
+        "PROCCODE",
+        "TRAN_TYPE",
+        "STORE_ID",
+        "RECURRING_TXN",
     }
-
-    payload = build_checkout_payload(
-        invoice=sample_invoice,
-        user=sample_user,
-        token="tok_abc",
-        return_url="https://example.com/return",
-        cancel_url="https://example.com/cancel",
-        merchant_id="MID123",
-    )
-
+    payload = _call(sample_invoice, sample_user)
     missing = required_keys - set(payload.keys())
-    assert not missing, f"Missing keys in payload: {missing}"
+    assert not missing, f"Missing keys: {missing}"
 
 
-def test_build_checkout_payload_uses_user_email_and_mobile(
-    sample_invoice: Invoice, sample_user: User
-) -> None:
-    """Customer email and phone must be populated from the User model."""
-    payload = build_checkout_payload(
-        invoice=sample_invoice,
-        user=sample_user,
-        token="tok_abc",
-        return_url="https://example.com/return",
-        cancel_url="https://example.com/cancel",
-        merchant_id="MID123",
-    )
-
+def test_customer_fields_from_user(sample_invoice, sample_user):
+    payload = _call(sample_invoice, sample_user)
     assert payload["CUSTOMER_EMAIL_ADDRESS"] == "customer@example.com"
     assert payload["CUSTOMER_MOBILE_NO"] == "03001234567"
 
 
-def test_build_checkout_payload_basket_id_from_invoice(
-    sample_invoice: Invoice, sample_user: User, sample_basket_id: uuid.UUID
-) -> None:
-    """BASKET_ID in payload must match invoice.basket_id (as string)."""
-    payload = build_checkout_payload(
-        invoice=sample_invoice,
-        user=sample_user,
-        token="tok_abc",
-        return_url="https://example.com/return",
-        cancel_url="https://example.com/cancel",
-        merchant_id="MID123",
-    )
-
+def test_basket_id_from_invoice(sample_invoice, sample_user, sample_basket_id):
+    payload = _call(sample_invoice, sample_user)
     assert payload["BASKET_ID"] == str(sample_basket_id)
 
 
-def test_build_checkout_payload_token_and_merchant_id(
-    sample_invoice: Invoice, sample_user: User
-) -> None:
-    """TOKEN and MERCHANT_ID must be set from the arguments."""
-    payload = build_checkout_payload(
-        invoice=sample_invoice,
-        user=sample_user,
+def test_token_and_merchant_id(sample_invoice, sample_user):
+    payload = _call(
+        sample_invoice,
+        sample_user,
         token="my_token_value",
-        return_url="https://example.com/return",
-        cancel_url="https://example.com/cancel",
         merchant_id="MIDXYZ",
     )
-
     assert payload["TOKEN"] == "my_token_value"
     assert payload["MERCHANT_ID"] == "MIDXYZ"
 
 
-def test_build_checkout_payload_urls_present(
-    sample_invoice: Invoice, sample_user: User
-) -> None:
-    """SUCCESS_URL and FAILURE_URL must be set from return_url and cancel_url."""
-    payload = build_checkout_payload(
-        invoice=sample_invoice,
-        user=sample_user,
-        token="tok",
-        return_url="https://example.com/success",
-        cancel_url="https://example.com/cancel",
-        merchant_id="MID",
-    )
-
-    assert payload["SUCCESS_URL"] == "https://example.com/success"
-    assert payload["FAILURE_URL"] == "https://example.com/cancel"
+def test_urls_present(sample_invoice, sample_user):
+    payload = _call(sample_invoice, sample_user)
+    assert payload["SUCCESS_URL"] == RETURN_URL
+    assert payload["FAILURE_URL"] == CANCEL_URL
+    assert payload["CHECKOUT_URL"] == CHECKOUT_URL
 
 
-def test_build_checkout_payload_currency_code_pkr(
-    sample_invoice: Invoice, sample_user: User
-) -> None:
-    """CURRENCY_CODE must default to PKR."""
-    payload = build_checkout_payload(
-        invoice=sample_invoice,
-        user=sample_user,
-        token="tok",
-        return_url="https://example.com/return",
-        cancel_url="https://example.com/cancel",
-        merchant_id="MID",
-    )
-
+def test_currency_code_pkr(sample_invoice, sample_user):
+    payload = _call(sample_invoice, sample_user)
     assert payload["CURRENCY_CODE"] == "PKR"
 
 
-def test_build_checkout_payload_all_values_are_strings(
-    sample_invoice: Invoice, sample_user: User
-) -> None:
-    """All dict values must be strings (form-encoding requirement)."""
-    payload = build_checkout_payload(
-        invoice=sample_invoice,
-        user=sample_user,
-        token="tok",
-        return_url="https://example.com/return",
-        cancel_url="https://example.com/cancel",
-        merchant_id="MID",
-    )
+def test_version_proccode_tran_type(sample_invoice, sample_user):
+    """VERSION, PROCCODE and TRAN_TYPE match PayFast's payment.php sample."""
+    payload = _call(sample_invoice, sample_user)
+    assert payload["VERSION"] == "MERCHANTCART-0.1"
+    assert payload["PROCCODE"] == "00"
+    assert payload["TRAN_TYPE"] == "ECOMM_PURCHASE"
 
+
+def test_order_date_format(sample_invoice, sample_user):
+    """ORDER_DATE is 'YYYY-MM-DD HH:MM:SS' per payment.php (date('Y-m-d H:i:s'))."""
+    payload = _call(sample_invoice, sample_user)
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", payload["ORDER_DATE"])
+
+
+def test_signature_is_correlation_tag(sample_invoice, sample_user, sample_basket_id):
+    """SIGNATURE = '<12-hex>-<basket_id>'."""
+    payload = _call(sample_invoice, sample_user)
+    sig = payload["SIGNATURE"]
+    expected_suffix = f"-{sample_basket_id}"
+    assert sig.endswith(expected_suffix)
+    prefix = sig[: -len(expected_suffix)]
+    assert len(prefix) == 12
+    assert all(c in "0123456789abcdef" for c in prefix)
+
+
+def test_recurring_txn_defaults_empty(sample_invoice, sample_user):
+    payload = _call(sample_invoice, sample_user)
+    assert payload["RECURRING_TXN"] == ""
+
+
+def test_recurring_txn_true_when_requested(sample_invoice, sample_user):
+    payload = _call(sample_invoice, sample_user, create_recurring_token=True)
+    assert payload["RECURRING_TXN"] == "TRUE"
+
+
+def test_all_values_are_strings(sample_invoice, sample_user):
+    """Form-encoding requires string values."""
+    payload = _call(sample_invoice, sample_user)
     non_strings = {k: v for k, v in payload.items() if not isinstance(v, str)}
-    assert not non_strings, f"Non-string values found: {non_strings}"
+    assert not non_strings, f"Non-string values: {non_strings}"
 
 
-def test_build_checkout_payload_user_with_no_phone(
-    sample_invoice: Invoice,
-) -> None:
-    """A user without a phone number should produce an empty string for mobile."""
+def test_user_with_no_phone_gives_empty_mobile(sample_invoice):
     user = User()
     user.id = 2
     user.email = "nophone@example.com"
@@ -218,13 +194,10 @@ def test_build_checkout_payload_user_with_no_phone(
     user.name = "No Phone"
     user.phone = None
 
-    payload = build_checkout_payload(
-        invoice=sample_invoice,
-        user=user,
-        token="tok",
-        return_url="https://example.com/return",
-        cancel_url="https://example.com/cancel",
-        merchant_id="MID",
-    )
-
+    payload = _call(sample_invoice, user)
     assert payload["CUSTOMER_MOBILE_NO"] == ""
+
+
+def test_merchant_name_override(sample_invoice, sample_user):
+    payload = _call(sample_invoice, sample_user, merchant_name="Acme Co")
+    assert payload["MERCHANT_NAME"] == "Acme Co"
