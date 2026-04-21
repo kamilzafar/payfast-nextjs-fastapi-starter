@@ -92,3 +92,4 @@ temp/
 *.pdf
 *.pptx
 # payment.php and validation_hash_calculation.txt ARE committed — see docs/README.md
+/.claude
