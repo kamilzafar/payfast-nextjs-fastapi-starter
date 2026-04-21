@@ -145,7 +145,7 @@ All planned phases (0–6) are complete:
 
 ### Known limitations
 
-- **PayFast protocol guesses**: seven fields in `backend/app/services/payfast/` (constants.py, signature.py, client.py, checkout.py, ipn.py) are our best read of the public docs and Bank AlFalah PDF. These need verification against live UAT once credentials are issued. Each is flagged with a `TODO(payfast-protocol):` comment — grep for them.
+- **PayFast protocol — fully verified**: the gateway contract in `backend/app/services/payfast/` matches PayFast's Merchant Integration Guide 2.3 and the IPN Integration Document. Live UAT token fetch and IPN validation-hash verification are both green. See `docs/PAYFAST_CONTRACT.md` for the field-by-field reference.
 - **No true MIT / auto-charge**: the Phase 5 charger implements hosted-redirect retries (email the customer a pay link) rather than server-side MIT charges. PayFast's MIT API is the eventual next step, but requires merchant onboarding + additional compliance review.
 - **E2E gated on UAT creds**: `frontend/e2e/smoke.spec.ts` runs the auth + nav happy path; `frontend/e2e/payment.spec.ts.skip` holds the planned full-payment journey — rename it and unblock once UAT access lands.
 - **Scheduler + workers**: the APScheduler runs in-process. The production Dockerfile uses `--workers 2`, which duplicates job firings. Jobs are idempotent (webhook dedupe, invoice state checks) so it's acceptable short-term, but scale out requires either `--workers 1` or extracting the scheduler to a separate process. See the NOTE comment in `backend/Dockerfile`.

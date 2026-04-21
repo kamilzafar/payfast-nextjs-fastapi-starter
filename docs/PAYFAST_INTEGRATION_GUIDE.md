@@ -4,7 +4,7 @@
 
 ## What PayFast is
 
-PayFast is a Pakistani payment gateway operated by APPS (operated by Bank AlFalah). It accepts card payments (Visa, Mastercard), Google Pay, mobile wallets (Easypaisa, JazzCash), and account transfers from customers. The gateway operates in two environments: UAT at `https://ipguat.apps.net.pk` (testing) and Live at `https://ipg1.apps.net.pk` (production). PayFast uses a hosted-redirect checkout model: you send the customer to PayFast's page, they enter payment details, then PayFast posts a server-to-server notification (IPN) to confirm the outcome. Currently PayFast does not support merchant-initiated token charges (MIT) or subscriptions natively — this codebase layers subscription billing on top of single-transaction PayFast payments.
+PayFast is a Pakistani payment gateway (gopayfast.com). It accepts card payments (Visa, Mastercard), Google Pay, mobile wallets (Easypaisa, JazzCash), and account transfers from customers. The gateway operates in two environments: UAT at `https://ipguat.apps.net.pk` (testing) and Live at `https://ipg1.apps.net.pk` (production). PayFast uses a hosted-redirect checkout model: you send the customer to PayFast's page, they enter payment details, then PayFast posts a server-to-server notification (IPN) to confirm the outcome. Currently PayFast does not support merchant-initiated token charges (MIT) or subscriptions natively — this codebase layers subscription billing on top of single-transaction PayFast payments.
 
 ## End-to-End Payment Flow
 
@@ -77,7 +77,7 @@ User at Frontend              Backend                PayFast
 
 ### 1. Provision PayFast Credentials
 
-Contact PayFast support (via Bank AlFalah) to obtain:
+Contact PayFast (gopayfast.com) to obtain:
 - `MERCHANT_ID` (numeric, e.g., "102")
 - `SECURED_KEY` (alphanumeric, e.g., "zWHjBp2AlttNu1sK")
 

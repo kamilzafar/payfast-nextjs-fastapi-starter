@@ -1,6 +1,6 @@
 # CLAUDE.md — PayFast Subscription Billing Platform
 
-**Stripe-like monthly subscription billing for Pakistan**, built on the PayFast hosted-redirect gateway (Bank AlFalah / APPS). FastAPI backend + Next.js 16 frontend + local Postgres. Production-ready through phase 6; live UAT verified.
+**Stripe-like monthly subscription billing for Pakistan**, built on the PayFast hosted-redirect gateway (gopayfast.com). FastAPI backend + Next.js 16 frontend + local Postgres. Production-ready through phase 6; live UAT verified.
 
 ## Stack
 
